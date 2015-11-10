@@ -82,12 +82,7 @@ class PxeManager(object):
         """
         self.failed_host_reservation_marker = 0
         print "INFO: fetching list of idle hosts"
-        available_machines = self.host_manager.find_resources(field="state", value="idle")
-        print "INFO: applying tag filter to available host list"
-        filtered_machines = self.filter_resources_by_tags(available_machines, tags)
-        if len(filtered_machines) < count:
-            print "Oops...There are not enough free resources to fill your request."
-            raise UnableToFullfillRequestException()
+        filtered_machines = self.get_filtered_machines(tags, count)
 
         for i in range(count):
             if self.failed_host_reservation_marker:
@@ -97,12 +92,7 @@ class PxeManager(object):
                  more than once.
                 '''
                 print "INFO: refreshing list of idle hosts after failed host reservation"
-                available_machines = self.host_manager.find_resources(field="state", value="idle")
-                print "INFO: applying tag filter to available host list"
-                filtered_machines = self.filter_resources_by_tags(available_machines, tags)
-                if len(filtered_machines) < count:
-                    print "Oops...There are not enough free resources to fill your request."
-                    raise UnableToFullfillRequestException()
+                filtered_machines = self.get_filtered_machines(tags, count)
                 self.failed_host_reservation_marker = 0
             hostname = filtered_machines[i]['hostname']
             print "INFO: using host", hostname
@@ -141,6 +131,15 @@ class PxeManager(object):
 
         print "Request fulfilled."
         return
+
+    def get_filtered_machines(self, tags, count):
+        available_machines = self.host_manager.find_resources(field="state", value="idle")
+        print "INFO: applying tag filter to available host list"
+        filtered_machines = self.filter_resources_by_tags(available_machines, tags)
+        if len(filtered_machines) < count:
+            print "Oops...There are not enough free resources to fill your request."
+            raise UnableToFullfillRequestException()
+        return filtered_machines
 
     def kickstart_machine(self, system_name, distro):
         """
