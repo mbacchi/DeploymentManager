@@ -80,6 +80,7 @@ class PxeManager(object):
         :param distro: what OS to install (see the global dict "distro" for valid options)
         :return:
         """
+        self.failed_host_reservation_marker = 0
         print "INFO: fetching list of idle hosts"
         available_machines = self.host_manager.find_resources(field="state", value="idle")
         print "INFO: applying tag filter to available host list"
@@ -89,6 +90,20 @@ class PxeManager(object):
             raise UnableToFullfillRequestException()
 
         for i in range(count):
+            if self.failed_host_reservation_marker:
+                '''
+                If the make_host_reservation failed below, we need to refresh our
+                 list of available_machines.  Otherwise we may reserve the same host
+                 more than once.
+                '''
+                print "INFO: refreshing list of idle hosts after failed host reservation"
+                available_machines = self.host_manager.find_resources(field="state", value="idle")
+                print "INFO: applying tag filter to available host list"
+                filtered_machines = self.filter_resources_by_tags(available_machines, tags)
+                if len(filtered_machines) < count:
+                    print "Oops...There are not enough free resources to fill your request."
+                    raise UnableToFullfillRequestException()
+                self.failed_host_reservation_marker = 0
             hostname = filtered_machines[i]['hostname']
             print "INFO: using host", hostname
             data = json.dumps({'hostname': hostname, 'owner': owner, 'state': 'pxe', 'job_id': job_id})
@@ -105,6 +120,7 @@ class PxeManager(object):
                 self.reservation_failed(system_name=hostname, state="needs_repair")
                 print "INFO: reserving the next available host"
                 self.make_host_reservation(owner=owner, count=1, job_id=job_id, distro=distro)
+                self.failed_host_reservation_marker = 1
             print "INFO: adding host", hostname, "to the reservation"
             self.host_reservation.append(hostname)
             print "INFO: kickstarting host:", hostname
